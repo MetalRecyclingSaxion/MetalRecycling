@@ -2,13 +2,13 @@ import RPi.GPIO as GPIO
 import time
 
 # GPIO pin configuration for stepper motors
-STEP_PIN_1         = 21  # Pin connected to the STEP input of the TB6600
-DIR_PIN_1          = 20  # Pin connected to the DIR input of the TB6600
-LIMIT_SWITCH_PIN_1 = 16  # Pin connected to the limit switch
+MOTOR1_STEP         = 21  # Pin connected to the STEP input of the TB6600
+MOTOR1_DIR          = 20  # Pin connected to the DIR input of the TB6600
+LIMIT_SWITCH_PIN_1  = 16  # Pin connected to the limit switch
 
-STEP_PIN_2         = 19  # Pin connected to the STEP input of the TB6600
-DIR_PIN_2          = 26  # Pin connected to the DIR input of the TB6600
-LIMIT_SWITCH_PIN_2 = 12  # Pin connected to the limit switch
+MOTOR2_STEP         = 19  # Pin connected to the STEP input of the TB6600
+MOTOR2_DIR          = 26  # Pin connected to the DIR input of the TB6600
+LIMIT_SWITCH_PIN_2  = 12  # Pin connected to the limit switch
 
 # GPIO pin configuration for servo motors
 SERVO_PIN_1 = 13  # Pin connected to the signal input of servo 1
@@ -29,11 +29,11 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 
 # Stepper motor GPIO setup
-GPIO.setup(STEP_PIN_1, GPIO.OUT)
-GPIO.setup(DIR_PIN_1, GPIO.OUT)
+GPIO.setup(MOTOR1_STEP, GPIO.OUT)
+GPIO.setup(MOTOR1_DIR, GPIO.OUT)
 GPIO.setup(LIMIT_SWITCH_PIN_1, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-GPIO.setup(STEP_PIN_2, GPIO.OUT)
-GPIO.setup(DIR_PIN_2, GPIO.OUT)
+GPIO.setup(MOTOR2_STEP, GPIO.OUT)
+GPIO.setup(MOTOR2_DIR, GPIO.OUT)
 GPIO.setup(LIMIT_SWITCH_PIN_2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 # Servo motor GPIO setup
@@ -57,6 +57,41 @@ def calculate_delay(speed):
     delay = base_delay / speed  # Adjust the wait time based on the speed
     return delay
 
+def move_motors(steps_motor1, steps_motor2, speed=0.001):
+    # Richting instellen op basis van het aantal stappen
+    GPIO.output(MOTOR1_DIR, GPIO.HIGH if steps_motor1 > 0 else GPIO.LOW)
+    GPIO.output(MOTOR2_DIR, GPIO.HIGH if steps_motor2 > 0 else GPIO.LOW)
+
+    # Absolute waarde van stappen nemen
+    steps_motor1 = abs(steps_motor1)
+    steps_motor2 = abs(steps_motor2)
+
+    # Bereken de totale stappen en de verhoudingen
+    max_steps = max(steps_motor1, steps_motor2)
+    ratio_motor1 = steps_motor1 / max_steps
+    ratio_motor2 = steps_motor2 / max_steps
+
+    step1_count = 0
+    step2_count = 0
+
+    for step in range(max_steps):
+        # Motor 1 stappen
+        if step1_count < steps_motor1 and (step / max_steps) >= step1_count / steps_motor1:
+            GPIO.output(MOTOR1_STEP, GPIO.HIGH)
+            time.sleep(speed / 2)  # Korte puls
+            GPIO.output(MOTOR1_STEP, GPIO.LOW)
+            step1_count += 1
+
+        # Motor 2 stappen
+        if step2_count < steps_motor2 and (step / max_steps) >= step2_count / steps_motor2:
+            GPIO.output(MOTOR2_STEP, GPIO.HIGH)
+            time.sleep(speed / 2)  # Korte puls
+            GPIO.output(MOTOR2_STEP, GPIO.LOW)
+            step2_count += 1
+
+        # Wacht tussen de stappen om snelheid te regelen
+        time.sleep(speed / 2)
+
 def step_motor(step_pin, dir_pin, steps, direction, speed_delay):
     """Control the stepper motor."""
     GPIO.output(dir_pin, direction)
@@ -76,7 +111,7 @@ def calibrate_motor(step_pin, dir_pin, limit_switch_pin):
         GPIO.output(step_pin, GPIO.LOW)
         time.sleep(CALIBRATION_SPEED_DELAY)
     print("Limit switch reached. 0 position set.")
-
+    
 def move_to_position(step_pin, dir_pin, target_position, current_position):
     """Move the motor to the desired position."""
     steps_to_move = target_position - current_position
@@ -98,8 +133,8 @@ def set_servo_angle(pwm, angle):
     pwm.ChangeDutyCycle(0)
 
 try:
-    calibrate_motor(STEP_PIN_1, DIR_PIN_1, LIMIT_SWITCH_PIN_1)
-    calibrate_motor(STEP_PIN_2, DIR_PIN_2, LIMIT_SWITCH_PIN_2)
+    calibrate_motor(MOTOR1_STEP, MOTOR1_DIR, LIMIT_SWITCH_PIN_1)
+    calibrate_motor(MOTOR2_STEP, MOTOR2_DIR, LIMIT_SWITCH_PIN_2)
     current_position_1 = 0
     current_position_2 = 0
 
@@ -118,14 +153,18 @@ try:
                 set_servo_angle(pwm1, 10)
 
             elif MIN_ST_POS <= x_position <= MAX_ST_POS:
-                current_position_1 = move_to_position(STEP_PIN_1, DIR_PIN_1, int(x_position), current_position_1)
+                current_position_1 = move_to_position(MOTOR1_STEP, MOTOR1_DIR, int(x_position), current_position_1)
                 delay = calculate_delay(conveyor_speed)
+                #Move both motor simultaneously to position on top op object
+                move_motors(x_position,750,speed=0.001)
+                #Wait for object to reach robot
                 print(f"Waiting for {delay:.2f} seconds depending on the speed of the conveyor belt...")
                 time.sleep(delay)
-                current_position_2 = move_to_position(STEP_PIN_2, DIR_PIN_2, current_position_2 + Z_Axis, current_position_2)
+                #Move robot down
+                current_position_2 = move_to_position(MOTOR2_STEP, MOTOR2_DIR, current_position_2 + 200, current_position_2)
                 # Code to activate solenoid
                 time.sleep(1.5)
-                current_position_2 = move_to_position(STEP_PIN_2, DIR_PIN_2, current_position_2 - Z_Axis, current_position_2)
+                current_position_2 = move_to_position(MOTOR2_STEP, MOTOR2_DIR, current_position_2 - 950, current_position_2)
                 # Code to move to the correct bin
 
             elif x_position > MAX_ST_POS:
