@@ -17,7 +17,9 @@ SERVO_PIN_2 = 6   # Pin connected to the signal input of servo 2
 # Conveyor distances
 MIN_ST_POS = 1000 # Below this value, servo 1 is activated
 MAX_ST_POS = 3000 # Above this value, servo 2 is activated
-Z_Axis     = 750  # Distance the Z-axis must travel to reach the conveyor
+Z_Axis1    = 800  # Distance the Z-axis must travel to reach the conveyor
+Z_Axis2    = 400  # Distance the Z-axis must travel to reach the conveyor
+last_x_pos = 0
 
 # Speed settings
 NORMAL_SPEED_DELAY      = 0.001  # Pulse duration for normal speed
@@ -153,19 +155,22 @@ try:
                 set_servo_angle(pwm1, 10)
 
             elif MIN_ST_POS <= x_position <= MAX_ST_POS:
-                current_position_1 = move_to_position(MOTOR1_STEP, MOTOR1_DIR, int(x_position), current_position_1)
-                delay = calculate_delay(conveyor_speed)
+                #calculate new x position based on last x position
+                new_x_pos = x_position - last_x_pos
                 #Move both motor simultaneously to position on top op object
-                move_motors(x_position,750,speed=0.001)
+                move_motors(int(new_x_pos),Z_Axis1,speed=0.001)
                 #Wait for object to reach robot
+                delay = calculate_delay(conveyor_speed)
                 print(f"Waiting for {delay:.2f} seconds depending on the speed of the conveyor belt...")
                 time.sleep(delay)
                 #Move robot down
-                current_position_2 = move_to_position(MOTOR2_STEP, MOTOR2_DIR, current_position_2 + 200, current_position_2)
-                # Code to activate solenoid
+                current_position_2 = move_to_position(MOTOR2_STEP, MOTOR2_DIR, current_position_2 + Z_Axis2, current_position_2)
+                #Code to activate solenoid
                 time.sleep(1.5)
-                current_position_2 = move_to_position(MOTOR2_STEP, MOTOR2_DIR, current_position_2 - 950, current_position_2)
-                # Code to move to the correct bin
+                current_position_2 = move_to_position(MOTOR2_STEP, MOTOR2_DIR, current_position_2 - (Z_Axis1 + Z_Axis2), current_position_2)
+                #Set last x position
+                last_x_pos = x_position 
+                #Code to move to the correct bin
 
             elif x_position > MAX_ST_POS:
                 delay = calculate_delay(conveyor_speed)
