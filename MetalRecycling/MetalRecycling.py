@@ -15,11 +15,13 @@ SERVO_PIN_1 = 13  # Pin connected to the signal input of servo 1
 SERVO_PIN_2 = 6   # Pin connected to the signal input of servo 2
 
 # Conveyor distances
-MIN_ST_POS = 1000 # Below this value, servo 1 is activated
-MAX_ST_POS = 3000 # Above this value, servo 2 is activated
-Z_Axis1    = 800  # Distance the Z-axis must travel to reach the conveyor
-Z_Axis2    = 400  # Distance the Z-axis must travel to reach the conveyor
-last_x_pos = 0
+MIN_ST_POS  = 1000 # Below this value, servo 1 is activated
+MAX_ST_POS  = 3000 # Above this value, servo 2 is activated
+FLIPPER_DIS = 1    # Distance Flipper from camera 
+ROBOT_DIS   = 1.5  # Dstance Robot from camera
+Z_Axis1     = 800  # Distance the Z-axis must travel to reach the conveyor
+Z_Axis2     = 400  # Distance the Z-axis must travel to pick up object
+last_x_pos  = 0    # Last x position used to calculate nu position x-axis
 
 # Speed settings
 NORMAL_SPEED_DELAY      = 0.001  # Pulse duration for normal speed
@@ -53,10 +55,11 @@ current_position_1   = 0
 current_position_2   = 0
 steps_per_revolution = 200  # Number of steps for a full revolution (e.g., 1.8 degrees/step)
 
-def calculate_delay(speed):
+def calculate_delay(speed, dis):
     """Calculate the wait time depending on the speed of the conveyor belt."""
-    base_delay = 10  # Base wait time in seconds at a standard speed
-    delay = base_delay / speed  # Adjust the wait time based on the speed
+    base_delay = 10 / speed  # Adjust the wait time based on the speed
+    delay = base_delay * dis
+    
     return delay
 
 def move_motors(steps_motor1, steps_motor2, speed=0.001):
@@ -120,9 +123,9 @@ def move_to_position(step_pin, dir_pin, target_position, current_position):
     direction = GPIO.HIGH if steps_to_move > 0 else GPIO.LOW
     steps_to_move = abs(steps_to_move)
 
-    print(f"Moving from position {current_position} to {target_position}...")
+    print(f"Moving to position")
     step_motor(step_pin, dir_pin, steps_to_move, direction, NORMAL_SPEED_DELAY)
-    print(f"Position reached: {target_position}")
+    print(f"Position reached")
     return target_position
 
 def set_servo_angle(pwm, angle):
@@ -146,7 +149,7 @@ try:
             x_position = float(user_input)
 
             if x_position < MIN_ST_POS:
-                delay = calculate_delay(conveyor_speed)
+                delay = calculate_delay(conveyor_speed, FLIPPER_DIS)
                 print(f"Waiting for {delay:.2f} seconds depending on the speed of the conveyor belt...")
                 time.sleep(delay)
                 print("Servo 1 movement started...")
@@ -155,12 +158,12 @@ try:
                 set_servo_angle(pwm1, 10)
 
             elif MIN_ST_POS <= x_position <= MAX_ST_POS:
-                #calculate new x position based on last x position
+                #Calculate new x position based on last x position
                 new_x_pos = x_position - last_x_pos
                 #Move both motor simultaneously to position on top op object
                 move_motors(int(new_x_pos),Z_Axis1,speed=0.001)
                 #Wait for object to reach robot
-                delay = calculate_delay(conveyor_speed)
+                delay = calculate_delay(conveyor_speed, ROBOT_DIS)
                 print(f"Waiting for {delay:.2f} seconds depending on the speed of the conveyor belt...")
                 time.sleep(delay)
                 #Move robot down
@@ -173,7 +176,7 @@ try:
                 #Code to move to the correct bin
 
             elif x_position > MAX_ST_POS:
-                delay = calculate_delay(conveyor_speed)
+                delay = calculate_delay(conveyor_speed, FLIPPER_DIS)
                 print(f"Waiting for {delay:.2f} seconds depending on the speed of the conveyor belt...")
                 time.sleep(delay)
                 print("Servo 2 movement started...")
@@ -194,3 +197,4 @@ finally:
     pwm1.stop()
     pwm2.stop()
     GPIO.cleanup()
+
