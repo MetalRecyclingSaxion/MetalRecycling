@@ -14,6 +14,9 @@ LimitSwitchPin2    = 12  # Pin connected to the limit switch
 ServoPin1 = 13  # Pin connected to the signal input of servo 1
 ServoPin2 = 6   # Pin connected to the signal input of servo 2
 
+# Emergency stop button pin
+EmergencyStopPin = 27  # Pin connected to the emergency stop button
+
 # Conveyor distances
 MinStPos   = 1000 # Below this value, servo 1 is activated
 MaxStPos   = 3000 # Above this value, servo 2 is activated
@@ -44,6 +47,9 @@ GPIO.setup(LimitSwitchPin2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 GPIO.setup(ServoPin1, GPIO.OUT)
 GPIO.setup(ServoPin2, GPIO.OUT)
 
+# Emergency stop GPIO setup
+GPIO.setup(EmergencyStopPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
 # Setup PWM on the servo pins
 Pwm1 = GPIO.PWM(ServoPin1, 50)  # 50Hz PWM frequency for servo 1
 Pwm2 = GPIO.PWM(ServoPin2, 50)  # 50Hz PWM frequency for servo 2
@@ -55,6 +61,12 @@ CurrentPosition1   = 0
 CurrentPosition2   = 0
 StepsPerRevolution = 200  # Number of steps for a full revolution (e.g., 1.8 degrees/step)
 
+def CheckEmergencyStop():
+    """Check if the emergency stop button is pressed."""
+    if GPIO.input(EmergencyStopPin) == GPIO.LOW:
+        print("Emergency stop activated!")
+        raise KeyboardInterrupt
+
 def CalculateDelay(speed, dis):
     """Calculate the wait time depending on the speed of the conveyor belt."""
     BaseDelay = 10 / speed  # Adjust the wait time based on the speed
@@ -63,44 +75,38 @@ def CalculateDelay(speed, dis):
     return Delay
 
 def MoveMotors(StepsMotor1, StepsMotor2, Speed=0.001):
-    # Richting instellen op basis van het aantal stappen
     GPIO.output(Motor1Dir, GPIO.HIGH if StepsMotor1 > 0 else GPIO.LOW)
     GPIO.output(Motor2Dir, GPIO.HIGH if StepsMotor2 > 0 else GPIO.LOW)
 
-    # Absolute waarde van stappen nemen
     StepsMotor1 = abs(StepsMotor1)
     StepsMotor2 = abs(StepsMotor2)
 
-    # Bereken de totale stappen en de verhoudingen
     MaxSteps = max(StepsMotor1, StepsMotor2)
-    RatioMotor1 = StepsMotor1 / MaxSteps
-    RatioMotor2 = StepsMotor2 / MaxSteps
-
     Step1Count = 0
     Step2Count = 0
 
     for Step in range(MaxSteps):
-        # Motor 1 stappen
-        if Step1Count < StepsMotor1 and (Step / MaxSteps) >= Step1Count / StepsMotor1:
+        CheckEmergencyStop()
+
+        if Step1Count < StepsMotor1:
             GPIO.output(Motor1Step, GPIO.HIGH)
-            time.sleep(Speed / 2)  # Korte puls
+            time.sleep(Speed / 2)
             GPIO.output(Motor1Step, GPIO.LOW)
             Step1Count += 1
 
-        # Motor 2 stappen
-        if Step2Count < StepsMotor2 and (Step / MaxSteps) >= Step2Count / StepsMotor2:
+        if Step2Count < StepsMotor2:
             GPIO.output(Motor2Step, GPIO.HIGH)
-            time.sleep(Speed / 2)  # Korte puls
+            time.sleep(Speed / 2)
             GPIO.output(Motor2Step, GPIO.LOW)
             Step2Count += 1
 
-        # Wacht tussen de stappen om snelheid te regelen
         time.sleep(Speed / 2)
 
 def StepMotor(StepPin, DirPin, Steps, Direction, SpeedDelay):
     """Control the stepper motor."""
     GPIO.output(DirPin, Direction)
     for _ in range(Steps):
+        CheckEmergencyStop()
         GPIO.output(StepPin, GPIO.HIGH)
         time.sleep(SpeedDelay)
         GPIO.output(StepPin, GPIO.LOW)
@@ -109,14 +115,15 @@ def StepMotor(StepPin, DirPin, Steps, Direction, SpeedDelay):
 def CalibrateMotor(StepPin, DirPin, LimitSwitchPin):
     """Calibrate the motor by moving to the 0 position."""
     print("Calibration started...")
-    GPIO.output(DirPin, GPIO.LOW)  # Set direction 
+    GPIO.output(DirPin, GPIO.LOW)
     while GPIO.input(LimitSwitchPin) == GPIO.LOW:
+        CheckEmergencyStop()
         GPIO.output(StepPin, GPIO.HIGH)
         time.sleep(CalibrationSpeedDelay)
         GPIO.output(StepPin, GPIO.LOW)
         time.sleep(CalibrationSpeedDelay)
     print("Limit switch reached. 0 position set.")
-    
+
 def MoveToPosition(StepPin, DirPin, TargetPosition, CurrentPosition):
     """Move the motor to the desired position."""
     StepsToMove = TargetPosition - CurrentPosition
@@ -130,7 +137,7 @@ def MoveToPosition(StepPin, DirPin, TargetPosition, CurrentPosition):
 
 def SetServoAngle(Pwm, Angle):
     """Set the angle of a servo."""
-    DutyCycle = 2 + (Angle / 18)  # Calculate the duty cycle for the desired angle
+    DutyCycle = 2 + (Angle / 18)
     GPIO.output(ServoPin1, True)
     Pwm.ChangeDutyCycle(DutyCycle)
     time.sleep(0.5)
@@ -144,6 +151,7 @@ try:
     CurrentPosition2 = 0
 
     while True:
+        CheckEmergencyStop()
         UserInput = input("Enter a position: ")
         try:
             XPosition = float(UserInput)
@@ -152,33 +160,28 @@ try:
                 Delay = CalculateDelay(ConveyorSpeed, FlipperDis)
                 print(f"Waiting for {Delay:.2f} seconds depending on the speed of the conveyor belt...")
                 time.sleep(Delay)
+                CheckEmergencyStop()
                 print("Servo 1 movement started...")
                 SetServoAngle(Pwm1, 170)
                 time.sleep(3.5)
                 SetServoAngle(Pwm1, 10)
 
             elif MinStPos <= XPosition <= MaxStPos:
-                # Calculate new x position based on last x position
                 NewXPos = XPosition - LastXPos
-                # Move both motors simultaneously to position on top of object
                 MoveMotors(int(NewXPos), ZAxis1, Speed=0.001)
-                # Wait for object to reach robot
                 Delay = CalculateDelay(ConveyorSpeed, RobotDis)
                 print(f"Waiting for {Delay:.2f} seconds depending on the speed of the conveyor belt...")
                 time.sleep(Delay)
-                # Move robot down
                 CurrentPosition2 = MoveToPosition(Motor2Step, Motor2Dir, CurrentPosition2 + ZAxis2, CurrentPosition2)
-                # Code to activate solenoid
                 time.sleep(1.5)
                 CurrentPosition2 = MoveToPosition(Motor2Step, Motor2Dir, CurrentPosition2 - (ZAxis1 + ZAxis2), CurrentPosition2)
-                # Set last x position
-                LastXPos = XPosition 
-                # Code to move to the correct bin
+                LastXPos = XPosition
 
             elif XPosition > MaxStPos:
                 Delay = CalculateDelay(ConveyorSpeed, FlipperDis)
                 print(f"Waiting for {Delay:.2f} seconds depending on the speed of the conveyor belt...")
                 time.sleep(Delay)
+                CheckEmergencyStop()
                 print("Servo 2 movement started...")
                 SetServoAngle(Pwm2, 10)
                 time.sleep(3.5)
