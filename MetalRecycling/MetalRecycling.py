@@ -15,8 +15,9 @@ LimitSwitchPin2    = 12  # Pin connected to the limit switch
 ServoPin1 = 13  # Pin connected to the signal input of servo 1
 ServoPin2 = 6   # Pin connected to the signal input of servo 2
 
-# Emergency stop button pin
-EmergencyStopPin = 27  # Pin connected to the emergency stop button
+# Pin configuration physical buttons
+Start         = 17  # Pin connected to the start button
+EmergencyStop = 27  # Pin connected to the emergency stop button
 
 # Conveyor distances
 MinStPos   = 500  # Below this value, servo 1 is activated
@@ -28,8 +29,8 @@ ZAxis2     = 400  # Distance the Z-axis must travel to pick up object
 LastXPos   = 0    # Last x position used to calculate nu position x-axis
 
 #Coordinates metal bins
-CopperBinXPos = 300
-SteelBinXPos  = 1700
+CopperBinXPos = 300  # Position X-Axis where copper bin is located
+SteelBinXPos  = 1700 # Position X-Axis where Steel bin is located
 
 # Speed settings
 NormalSpeedDelay      = 0.004  # Pulse duration for normal speed
@@ -53,7 +54,7 @@ GPIO.setup(ServoPin1, GPIO.OUT)
 GPIO.setup(ServoPin2, GPIO.OUT)
 
 # Emergency stop GPIO setup
-GPIO.setup(EmergencyStopPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(EmergencyStop, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 # Setup PWM on the servo pins
 Pwm1 = GPIO.PWM(ServoPin1, 50)  # 50Hz PWM frequency for servo 1
@@ -68,7 +69,7 @@ StepsPerRevolution = 200  # Number of steps for a full revolution (e.g., 1.8 deg
 
 def CheckEmergencyStop():
     """Check if the emergency stop button is pressed."""
-    if GPIO.input(EmergencyStopPin) == GPIO.LOW:
+    if GPIO.input(EmergencyStop) == GPIO.LOW:
         print("Emergency stop activated!")
         raise KeyboardInterrupt
 
@@ -120,7 +121,7 @@ def StepMotor(StepPin, DirPin, Steps, Direction, SpeedDelay):
 def CalibrateMotor(StepPin, DirPin, LimitSwitchPin):
     """Calibrate the motor by moving to the 0 position."""
     print("Calibration started...")
-    GPIO.output(DirPin, GPIO.LOW)
+    GPIO.output(DirPin, GPIO.LOW)  #GPIO.output(DirPin, GPIO.High) "Om andere kant op te laten draaien"
     while GPIO.input(LimitSwitchPin) == GPIO.LOW:
         CheckEmergencyStop()
         GPIO.output(StepPin, GPIO.HIGH)
@@ -150,77 +151,78 @@ def SetServoAngle(Pwm, Angle):
     Pwm.ChangeDutyCycle(0)
 
 try:
-    CalibrateMotor(Motor1Step, Motor1Dir, LimitSwitchPin1)
-    CalibrateMotor(Motor2Step, Motor2Dir, LimitSwitchPin2)
-    CurrentPosition1 = 0
-    CurrentPosition2 = 0
+    if Start:
+        CalibrateMotor(Motor1Step, Motor1Dir, LimitSwitchPin1)
+        CalibrateMotor(Motor2Step, Motor2Dir, LimitSwitchPin2)
+        CurrentPosition1 = 0
+        CurrentPosition2 = 0
     
-    #Code to move to middle of the X-axis after calibrating
-    LastXPos = MoveToPosition(Motor1Step, Motor1Dir, ((MaxStPos + MinStPos)//2), CurrentPosition1)
+        #Code to move to middle of the X-axis after calibrating
+        LastXPos = MoveToPosition(Motor1Step, Motor1Dir, ((MaxStPos + MinStPos)//2), CurrentPosition1)
 
-    while True:
-        CheckEmergencyStop()
-        UserInput = input("Enter a position: ")
-        try:
-            XPosition = float(UserInput)
+        while True:
+            CheckEmergencyStop()
+            UserInput = input("Enter a position: ")
+            try:
+                XPosition = float(UserInput)
 
-            if XPosition < MinStPos:
-                Delay = CalculateDelay(ConveyorSpeed, FlipperDis)
-                print(f"Waiting for {Delay:.2f} seconds depending on the speed of the conveyor belt...")
-                time.sleep(Delay)
-                CheckEmergencyStop()
-                print("Servo 1 movement started...")
-                SetServoAngle(Pwm1, 170)
-                time.sleep(3.5)
-                SetServoAngle(Pwm1, 10)
+                if XPosition < MinStPos:
+                    Delay = CalculateDelay(ConveyorSpeed, FlipperDis)
+                    print(f"Waiting for {Delay:.2f} seconds depending on the speed of the conveyor belt...")
+                    time.sleep(Delay)
+                    CheckEmergencyStop()
+                    print("Servo 1 movement started...")
+                    SetServoAngle(Pwm1, 170)
+                    time.sleep(3.5)
+                    SetServoAngle(Pwm1, 10)
 
-            elif MinStPos <= XPosition <= MaxStPos:
-                # Calculate new x position based on last x position
-                NewXPos = XPosition - LastXPos
-                # Move both motors simultaneously to position on top of object
-                MoveMotors(int(NewXPos), ZAxis1, Speed=0.001)
-                # Wait for object to reach robot
-                Delay = CalculateDelay(ConveyorSpeed, RobotDis)
-                print(f"Waiting for {Delay:.2f} seconds depending on the speed of the conveyor belt...")
-                time.sleep(Delay)
-                # Move robot down
-                CurrentPosition2 = MoveToPosition(Motor2Step, Motor2Dir, CurrentPosition2 + ZAxis2, CurrentPosition2)
-                # Code to activate solenoid
+                elif MinStPos <= XPosition <= MaxStPos:
+                    # Calculate new x position based on last x position
+                    NewXPos = XPosition - LastXPos
+                    # Move both motors simultaneously to position on top of object
+                    MoveMotors(int(NewXPos), ZAxis1, Speed=0.001)
+                    # Wait for object to reach robot
+                    Delay = CalculateDelay(ConveyorSpeed, RobotDis)
+                    print(f"Waiting for {Delay:.2f} seconds depending on the speed of the conveyor belt...")
+                    time.sleep(Delay)
+                    # Move robot down
+                    CurrentPosition2 = MoveToPosition(Motor2Step, Motor2Dir, CurrentPosition2 + ZAxis2, CurrentPosition2)
+                    # Code to activate solenoid
                 
-                time.sleep(1.0)
+                    time.sleep(1.0)
                 
-                CurrentPosition2 = MoveToPosition(Motor2Step, Motor2Dir, CurrentPosition2 - (ZAxis1 + ZAxis2), CurrentPosition2) 
-                # Code to move to the correct bin
-                MetalType = input("Enter a metal type 'Copper' or 'Steel' ")
+                    CurrentPosition2 = MoveToPosition(Motor2Step, Motor2Dir, CurrentPosition2 - (ZAxis1 + ZAxis2), CurrentPosition2) 
+                    # Code to move to the correct bin
+                    MetalType = input("Enter a metal type 'Copper' or 'Steel' ")
                 
-                if MetalType == 'Copper' :
-                    XPosBin = CopperBinXPos
+                    if MetalType == 'Copper' :
+                        XPosBin = CopperBinXPos
                     
-                elif MetalType == 'Steel' :
-                    XPosBin = SteelBinXPos
+                    elif MetalType == 'Steel' :
+                        XPosBin = SteelBinXPos
                     
-                #More options for different metals can be added above
+                    #More options for different metals can be added above
 
-                #Move X-axis to correct bin
-                LastXPos = MoveToPosition(Motor1Step, Motor1Dir, XPosBin, XPosition)
+                    #Move X-axis to correct bin
+                    LastXPos = MoveToPosition(Motor1Step, Motor1Dir, XPosBin, XPosition)
                     
                   
 
-            elif XPosition > MaxStPos:
-                Delay = CalculateDelay(ConveyorSpeed, FlipperDis)
-                print(f"Waiting for {Delay:.2f} seconds depending on the speed of the conveyor belt...")
-                time.sleep(Delay)
-                CheckEmergencyStop()
-                print("Servo 2 movement started...")
-                SetServoAngle(Pwm2, 10)
-                time.sleep(3.5)
-                SetServoAngle(Pwm2, 170)
+                elif XPosition > MaxStPos:
+                    Delay = CalculateDelay(ConveyorSpeed, FlipperDis)
+                    print(f"Waiting for {Delay:.2f} seconds depending on the speed of the conveyor belt...")
+                    time.sleep(Delay)
+                    CheckEmergencyStop()
+                    print("Servo 2 movement started...")
+                    SetServoAngle(Pwm2, 10)
+                    time.sleep(3.5)
+                    SetServoAngle(Pwm2, 170)
 
-            else:
-                print("The entered number is not within the defined ranges.")
+                else:
+                    print("The entered number is not within the defined ranges.")
 
-        except ValueError:
-            print("Enter a valid number.")
+            except ValueError:
+                print("Enter a valid number.")
 
 except KeyboardInterrupt:
     print("\nProgram stopped.")
