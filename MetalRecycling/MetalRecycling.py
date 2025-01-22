@@ -1,3 +1,4 @@
+from tkinter import MOVETO
 import RPi.GPIO as GPIO
 import time
 
@@ -18,13 +19,17 @@ ServoPin2 = 6   # Pin connected to the signal input of servo 2
 EmergencyStopPin = 27  # Pin connected to the emergency stop button
 
 # Conveyor distances
-MinStPos   = 1000 # Below this value, servo 1 is activated
-MaxStPos   = 3000 # Above this value, servo 2 is activated
+MinStPos   = 500  # Below this value, servo 1 is activated
+MaxStPos   = 1500 # Above this value, servo 2 is activated
 FlipperDis = 1    # Distance Flipper from camera 
 RobotDis   = 1.5  # Distance Robot from camera
 ZAxis1     = 800  # Distance the Z-axis must travel to reach the conveyor
 ZAxis2     = 400  # Distance the Z-axis must travel to pick up object
 LastXPos   = 0    # Last x position used to calculate nu position x-axis
+
+#Coordinates metal bins
+CopperBinXPos = 200
+SteelBinXPos  = 1700
 
 # Speed settings
 NormalSpeedDelay      = 0.001  # Pulse duration for normal speed
@@ -149,6 +154,9 @@ try:
     CalibrateMotor(Motor2Step, Motor2Dir, LimitSwitchPin2)
     CurrentPosition1 = 0
     CurrentPosition2 = 0
+    
+    #Code to move to middle of the X-axis after calibrating
+    MoveToPosition(Motor1Step, Motor1Dir, ((MaxStPos + MinStPos)//2), CurrentPosition1)
 
     while True:
         CheckEmergencyStop()
@@ -167,15 +175,32 @@ try:
                 SetServoAngle(Pwm1, 10)
 
             elif MinStPos <= XPosition <= MaxStPos:
+                # Calculate new x position based on last x position
                 NewXPos = XPosition - LastXPos
+                # Move both motors simultaneously to position on top of object
                 MoveMotors(int(NewXPos), ZAxis1, Speed=0.001)
+                # Wait for object to reach robot
                 Delay = CalculateDelay(ConveyorSpeed, RobotDis)
                 print(f"Waiting for {Delay:.2f} seconds depending on the speed of the conveyor belt...")
                 time.sleep(Delay)
+                # Move robot down
                 CurrentPosition2 = MoveToPosition(Motor2Step, Motor2Dir, CurrentPosition2 + ZAxis2, CurrentPosition2)
+                # Code to activate solenoid
                 time.sleep(1.5)
-                CurrentPosition2 = MoveToPosition(Motor2Step, Motor2Dir, CurrentPosition2 - (ZAxis1 + ZAxis2), CurrentPosition2)
-                LastXPos = XPosition
+                CurrentPosition2 = MoveToPosition(Motor2Step, Motor2Dir, CurrentPosition2 - (ZAxis1 + ZAxis2), CurrentPosition2) 
+                # Code to move to the correct bin
+                MetalType = input("Enter a metal type: ")
+                
+                if MetalType == 'Copper' :
+                    XPosBin = CopperBinXPos
+                    
+                elif MetalType == 'Steel' :
+                    XPosBin = SteelBinXPos
+                    
+                #Move X-axis to correct bin
+                LastXPos = MoveToPosition(Motor1Step, Motor1Dir, XPosBin, XPosition)
+                    
+                  
 
             elif XPosition > MaxStPos:
                 Delay = CalculateDelay(ConveyorSpeed, FlipperDis)
