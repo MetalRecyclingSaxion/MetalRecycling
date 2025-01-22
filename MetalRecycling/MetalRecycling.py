@@ -28,11 +28,11 @@ ZAxis2     = 400  # Distance the Z-axis must travel to pick up object
 LastXPos   = 0    # Last x position used to calculate nu position x-axis
 
 #Coordinates metal bins
-CopperBinXPos = 200
+CopperBinXPos = 300
 SteelBinXPos  = 1700
 
 # Speed settings
-NormalSpeedDelay      = 0.001  # Pulse duration for normal speed
+NormalSpeedDelay      = 0.004  # Pulse duration for normal speed
 CalibrationSpeedDelay = 0.005  # Pulse duration for calibration speed
 ConveyorSpeed         = 3      # Adjust this value to match the speed of your conveyor belt
 
@@ -156,7 +156,7 @@ try:
     CurrentPosition2 = 0
     
     #Code to move to middle of the X-axis after calibrating
-    MoveToPosition(Motor1Step, Motor1Dir, ((MaxStPos + MinStPos)//2), CurrentPosition1)
+    LastXPos = MoveToPosition(Motor1Step, Motor1Dir, ((MaxStPos + MinStPos)//2), CurrentPosition1)
 
     while True:
         CheckEmergencyStop()
@@ -186,10 +186,12 @@ try:
                 # Move robot down
                 CurrentPosition2 = MoveToPosition(Motor2Step, Motor2Dir, CurrentPosition2 + ZAxis2, CurrentPosition2)
                 # Code to activate solenoid
-                time.sleep(1.5)
+                
+                time.sleep(1.0)
+                
                 CurrentPosition2 = MoveToPosition(Motor2Step, Motor2Dir, CurrentPosition2 - (ZAxis1 + ZAxis2), CurrentPosition2) 
                 # Code to move to the correct bin
-                MetalType = input("Enter a metal type: ")
+                MetalType = input("Enter a metal type 'Copper' or 'Steel' ")
                 
                 if MetalType == 'Copper' :
                     XPosBin = CopperBinXPos
@@ -197,6 +199,8 @@ try:
                 elif MetalType == 'Steel' :
                     XPosBin = SteelBinXPos
                     
+                #More options for different metals can be added above
+
                 #Move X-axis to correct bin
                 LastXPos = MoveToPosition(Motor1Step, Motor1Dir, XPosBin, XPosition)
                     
