@@ -1,4 +1,3 @@
-from tkinter import MOVETO
 import RPi.GPIO as GPIO
 import time
 
