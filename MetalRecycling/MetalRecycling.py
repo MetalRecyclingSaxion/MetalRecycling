@@ -3,13 +3,13 @@ import RPi.GPIO as GPIO
 import time
 
 # GPIO pin configuration for stepper motors
-Motor1Step         = 21  # Pin connected to the STEP input of the TB6600
-Motor1Dir          = 20  # Pin connected to the DIR input of the TB6600
-LimitSwitchPin1    = 16  # Pin connected to the limit switch
+Motor1Step         = 19 # Pin connected to the STEP input of the TB6600
+Motor1Dir          = 26 # Pin connected to the DIR input of the TB6600
+LimitSwitchPin1    = 16 # Pin connected to the limit switch
 
-Motor2Step         = 19  # Pin connected to the STEP input of the TB6600
-Motor2Dir          = 26  # Pin connected to the DIR input of the TB6600
-LimitSwitchPin2    = 12  # Pin connected to the limit switch
+Motor2Step         = 21 # Pin connected to the STEP input of the TB6600
+Motor2Dir          = 20 # Pin connected to the DIR input of the TB6600
+LimitSwitchPin2    = 12 # Pin connected to the limit switch
 
 # GPIO pin configuration for servo motors
 ServoPin1 = 13  # Pin connected to the signal input of servo 1
@@ -18,19 +18,20 @@ ServoPin2 = 6   # Pin connected to the signal input of servo 2
 # Pin configuration physical buttons
 Start         = 17  # Pin connected to the start button
 EmergencyStop = 27  # Pin connected to the emergency stop button
+Gripper       = 22  # Pin connected to relais to activate gripper
 
 # Conveyor distances
-MinStPos   = 500  # Below this value, servo 1 is activated
-MaxStPos   = 1500 # Above this value, servo 2 is activated
+MinStPos   = 50  # Below this value, servo 1 is activated
+MaxStPos   = 1000 # Above this value, servo 2 is activated
 FlipperDis = 1    # Distance Flipper from camera 
 RobotDis   = 1.5  # Distance Robot from camera
-ZAxis1     = 800  # Distance the Z-axis must travel to reach the conveyor
-ZAxis2     = 400  # Distance the Z-axis must travel to pick up object
+ZAxis1     = 600  # Distance the Z-axis must travel to reach the conveyor
+ZAxis2     = 150  # Distance the Z-axis must travel to pick up object
 LastXPos   = 0    # Last x position used to calculate nu position x-axis
 
 #Coordinates metal bins
-CopperBinXPos = 300  # Position X-Axis where copper bin is located
-SteelBinXPos  = 1700 # Position X-Axis where Steel bin is located
+CopperBinXPos = 50  # Position X-Axis where copper bin is located
+SteelBinXPos  = 1000 # Position X-Axis where Steel bin is located
 
 # Speed settings
 NormalSpeedDelay      = 0.004  # Pulse duration for normal speed
@@ -56,6 +57,9 @@ GPIO.setup(ServoPin2, GPIO.OUT)
 # Emergency stop GPIO setup
 GPIO.setup(EmergencyStop, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
+# Gripper GPIO setup
+GPIO.setup(Gripper, GPIO.OUT)
+
 # Setup PWM on the servo pins
 Pwm1 = GPIO.PWM(ServoPin1, 50)  # 50Hz PWM frequency for servo 1
 Pwm2 = GPIO.PWM(ServoPin2, 50)  # 50Hz PWM frequency for servo 2
@@ -80,12 +84,12 @@ def CalculateDelay(speed, dis):
     
     return Delay
 
-def MoveMotors(StepsMotor1, StepsMotor2, Speed=0.001):
-    GPIO.output(Motor1Dir, GPIO.HIGH if StepsMotor1 > 0 else GPIO.LOW)
-    GPIO.output(Motor2Dir, GPIO.HIGH if StepsMotor2 > 0 else GPIO.LOW)
+def MoveMotors(StepsMotor1, StepsMotor2, Speed=0.003):
+    GPIO.output(Motor1Dir, GPIO.LOW if StepsMotor1 > 0 else GPIO.HIGH)
+    GPIO.output(Motor2Dir, GPIO.LOW if StepsMotor2 > 0 else GPIO.HIGH)
 
-    StepsMotor1 = abs(StepsMotor1)
-    StepsMotor2 = abs(StepsMotor2)
+    StepsMotor1 = abs(int(StepsMotor1))  # Ensure StepsMotor1 is an integer
+    StepsMotor2 = abs(int(StepsMotor2))  # Ensure StepsMotor2 is an integer
 
     MaxSteps = max(StepsMotor1, StepsMotor2)
     Step1Count = 0
@@ -111,7 +115,7 @@ def MoveMotors(StepsMotor1, StepsMotor2, Speed=0.001):
 def StepMotor(StepPin, DirPin, Steps, Direction, SpeedDelay):
     """Control the stepper motor."""
     GPIO.output(DirPin, Direction)
-    for _ in range(Steps):
+    for _ in range(int(Steps)):  # Ensure Steps is an integer
         CheckEmergencyStop()
         GPIO.output(StepPin, GPIO.HIGH)
         time.sleep(SpeedDelay)
@@ -121,7 +125,7 @@ def StepMotor(StepPin, DirPin, Steps, Direction, SpeedDelay):
 def CalibrateMotor(StepPin, DirPin, LimitSwitchPin):
     """Calibrate the motor by moving to the 0 position."""
     print("Calibration started...")
-    GPIO.output(DirPin, GPIO.LOW)  #GPIO.output(DirPin, GPIO.High) "Om andere kant op te laten draaien"
+    GPIO.output(DirPin, GPIO.HIGH)   #GPIO.output(DirPin, GPIO.High) "Om andere kant op te laten draaien"
     while GPIO.input(LimitSwitchPin) == GPIO.LOW:
         CheckEmergencyStop()
         GPIO.output(StepPin, GPIO.HIGH)
@@ -132,8 +136,8 @@ def CalibrateMotor(StepPin, DirPin, LimitSwitchPin):
 
 def MoveToPosition(StepPin, DirPin, TargetPosition, CurrentPosition):
     """Move the motor to the desired position."""
-    StepsToMove = TargetPosition - CurrentPosition
-    Direction = GPIO.HIGH if StepsToMove > 0 else GPIO.LOW
+    StepsToMove = int(TargetPosition - CurrentPosition)  # Ensure StepsToMove is an integer
+    Direction = GPIO.LOW if StepsToMove > 0 else GPIO.HIGH
     StepsToMove = abs(StepsToMove)
 
     print(f"Moving to position")
@@ -151,15 +155,14 @@ def SetServoAngle(Pwm, Angle):
     Pwm.ChangeDutyCycle(0)
 
 try:
-    if Start:
-        CalibrateMotor(Motor1Step, Motor1Dir, LimitSwitchPin1)
+    
+    #while GPIO.input(Start) == GPIO.LOW:
         CalibrateMotor(Motor2Step, Motor2Dir, LimitSwitchPin2)
+        CalibrateMotor(Motor1Step, Motor1Dir, LimitSwitchPin1)
+   
         CurrentPosition1 = 0
         CurrentPosition2 = 0
     
-        #Code to move to middle of the X-axis after calibrating
-        LastXPos = MoveToPosition(Motor1Step, Motor1Dir, ((MaxStPos + MinStPos)//2), CurrentPosition1)
-
         while True:
             CheckEmergencyStop()
             UserInput = input("Enter a position: ")
@@ -180,7 +183,7 @@ try:
                     # Calculate new x position based on last x position
                     NewXPos = XPosition - LastXPos
                     # Move both motors simultaneously to position on top of object
-                    MoveMotors(int(NewXPos), ZAxis1, Speed=0.001)
+                    MoveMotors(int(NewXPos), ZAxis1, Speed=0.003)
                     # Wait for object to reach robot
                     Delay = CalculateDelay(ConveyorSpeed, RobotDis)
                     print(f"Waiting for {Delay:.2f} seconds depending on the speed of the conveyor belt...")
@@ -188,6 +191,7 @@ try:
                     # Move robot down
                     CurrentPosition2 = MoveToPosition(Motor2Step, Motor2Dir, CurrentPosition2 + ZAxis2, CurrentPosition2)
                     # Code to activate solenoid
+                    GPIO.output(Gripper, GPIO.HIGH)
                 
                     time.sleep(1.0)
                 
@@ -196,10 +200,10 @@ try:
                     MetalType = input("Enter a metal type 'Copper' or 'Steel' ")
                 
                     if MetalType == 'Copper' :
-                        XPosBin = CopperBinXPos
+                        XPosBin = int(CopperBinXPos)
                     
-                    elif MetalType == 'Steel' :
-                        XPosBin = SteelBinXPos
+                    elif MetalType == 'Steel':
+                        XPosBin = int(SteelBinXPos)
                     
                     #More options for different metals can be added above
 
@@ -231,3 +235,5 @@ finally:
     Pwm1.stop()
     Pwm2.stop()
     GPIO.cleanup()
+
+
