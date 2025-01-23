@@ -43,11 +43,11 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 
 # Stepper motor GPIO setup
-GPIO.setup(Motor1Step, GPIO.OUT)
 GPIO.setup(Motor1Dir, GPIO.OUT)
-GPIO.setup(LimitSwitchPin1, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-GPIO.setup(Motor2Step, GPIO.OUT)
 GPIO.setup(Motor2Dir, GPIO.OUT)
+GPIO.setup(Motor1Step, GPIO.OUT)
+GPIO.setup(Motor2Step, GPIO.OUT)
+GPIO.setup(LimitSwitchPin1, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 GPIO.setup(LimitSwitchPin2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 # Servo motor GPIO setup
@@ -56,6 +56,7 @@ GPIO.setup(ServoPin2, GPIO.OUT)
 
 # Emergency stop GPIO setup
 GPIO.setup(EmergencyStop, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(Start, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 # Gripper GPIO setup
 GPIO.setup(Gripper, GPIO.OUT)
@@ -71,14 +72,21 @@ CurrentPosition1   = 0
 CurrentPosition2   = 0
 StepsPerRevolution = 200  # Number of steps for a full revolution (e.g., 1.8 degrees/step)
 
+def WaitForStartButton():
+    #Waits until start button is pressed
+    print("Wacht op startknop om te beginnen...")
+    while GPIO.input(Start) == GPIO.HIGH:  # Button not pressed
+        CheckEmergencyStop()
+        time.sleep(0.1)  # Lowers CPU-load
+
 def CheckEmergencyStop():
-    """Check if the emergency stop button is pressed."""
+    # Check if the emergency stop button is pressed.
     if GPIO.input(EmergencyStop) == GPIO.LOW:
         print("Emergency stop activated!")
         raise KeyboardInterrupt
 
 def CalculateDelay(speed, dis):
-    """Calculate the wait time depending on the speed of the conveyor belt."""
+    # Calculate the wait time depending on the speed of the conveyor belt.
     BaseDelay = 10 / speed  # Adjust the wait time based on the speed
     Delay = BaseDelay * dis
     
@@ -113,7 +121,7 @@ def MoveMotors(StepsMotor1, StepsMotor2, Speed=0.003):
         time.sleep(Speed / 2)
 
 def StepMotor(StepPin, DirPin, Steps, Direction, SpeedDelay):
-    """Control the stepper motor."""
+    # Control the stepper motor.
     GPIO.output(DirPin, Direction)
     for _ in range(int(Steps)):  # Ensure Steps is an integer
         CheckEmergencyStop()
@@ -144,7 +152,7 @@ def CalibrateMotor(StepPin, DirPin, LimitSwitchPin):
 
 
 def MoveToPosition(StepPin, DirPin, TargetPosition, CurrentPosition):
-    """Move the motor to the desired position."""
+    # Move the motor to the desired position.
     StepsToMove = int(TargetPosition - CurrentPosition)  # Ensure StepsToMove is an integer
     Direction = GPIO.LOW if StepsToMove > 0 else GPIO.HIGH
     StepsToMove = abs(StepsToMove)
@@ -155,7 +163,7 @@ def MoveToPosition(StepPin, DirPin, TargetPosition, CurrentPosition):
     return TargetPosition
 
 def SetServoAngle(Pwm, Angle):
-    """Set the angle of a servo."""
+    # Set the angle of a servo.
     DutyCycle = 2 + (Angle / 18)
     GPIO.output(ServoPin1, True)
     Pwm.ChangeDutyCycle(DutyCycle)
@@ -164,8 +172,10 @@ def SetServoAngle(Pwm, Angle):
     Pwm.ChangeDutyCycle(0)
 
 try:
-    
-    #while GPIO.input(Start) == GPIO.LOW:
+        # Waits for start button     
+        WaitForStartButton()
+
+        # Starts calibration
         CalibrateMotor(Motor2Step, Motor2Dir, LimitSwitchPin2)
         CalibrateMotor(Motor1Step, Motor1Dir, LimitSwitchPin1)
    
