@@ -123,16 +123,25 @@ def StepMotor(StepPin, DirPin, Steps, Direction, SpeedDelay):
         time.sleep(SpeedDelay)
 
 def CalibrateMotor(StepPin, DirPin, LimitSwitchPin):
-    """Calibrate the motor by moving to the 0 position."""
+    #Calibrate the motor by moving to the 0 position.
     print("Calibration started...")
-    GPIO.output(DirPin, GPIO.HIGH)   #GPIO.output(DirPin, GPIO.High) "Om andere kant op te laten draaien"
-    while GPIO.input(LimitSwitchPin) == GPIO.LOW:
+    GPIO.output(DirPin, GPIO.HIGH)  # Draai richting aanpassen indien nodig
+    debounce_time = 0.05  # 50 milliseconden
+    while True:
         CheckEmergencyStop()
         GPIO.output(StepPin, GPIO.HIGH)
         time.sleep(CalibrationSpeedDelay)
         GPIO.output(StepPin, GPIO.LOW)
         time.sleep(CalibrationSpeedDelay)
-    print("Limit switch reached. 0 position set.")
+        
+        # Controleer of de limietschakelaar stabiel hoog is
+        if GPIO.input(LimitSwitchPin) == GPIO.HIGH:
+            stable_start_time = time.time()
+            while GPIO.input(LimitSwitchPin) == GPIO.HIGH:
+                if time.time() - stable_start_time >= debounce_time:
+                    print("Limit switch reached. 0 position set.")
+                    return
+
 
 def MoveToPosition(StepPin, DirPin, TargetPosition, CurrentPosition):
     """Move the motor to the desired position."""
