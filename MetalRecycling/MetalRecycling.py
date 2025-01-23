@@ -79,11 +79,13 @@ def WaitForStartButton():
         CheckEmergencyStop()
         time.sleep(0.1)  # Lowers CPU-load
 
+
 def CheckEmergencyStop():
     # Check if the emergency stop button is pressed.
     if GPIO.input(EmergencyStop) == GPIO.LOW:
         print("Emergency stop activated!")
         raise KeyboardInterrupt
+
 
 def CalculateDelay(speed, dis):
     # Calculate the wait time depending on the speed of the conveyor belt.
@@ -92,33 +94,37 @@ def CalculateDelay(speed, dis):
     
     return Delay
 
+
 def MoveMotors(StepsMotor1, StepsMotor2, Speed=0.003):
+    # Set the direction for Motor1 and Motor2
     GPIO.output(Motor1Dir, GPIO.LOW if StepsMotor1 > 0 else GPIO.HIGH)
     GPIO.output(Motor2Dir, GPIO.LOW if StepsMotor2 > 0 else GPIO.HIGH)
 
-    StepsMotor1 = abs(int(StepsMotor1))  # Ensure StepsMotor1 is an integer
-    StepsMotor2 = abs(int(StepsMotor2))  # Ensure StepsMotor2 is an integer
+    # Ensure StepsMotor1 and StepsMotor2 are integers and take their absolute values
+    StepsMotor1 = abs(int(StepsMotor1))
+    StepsMotor2 = abs(int(StepsMotor2))
 
     MaxSteps = max(StepsMotor1, StepsMotor2)
     Step1Count = 0
     Step2Count = 0
 
     for Step in range(MaxSteps):
-        CheckEmergencyStop()
+        CheckEmergencyStop()  # Check for emergency stop condition
 
         if Step1Count < StepsMotor1:
-            GPIO.output(Motor1Step, GPIO.HIGH)
+            GPIO.output(Motor1Step, GPIO.HIGH)  # Step Motor1
             time.sleep(Speed / 2)
             GPIO.output(Motor1Step, GPIO.LOW)
             Step1Count += 1
 
         if Step2Count < StepsMotor2:
-            GPIO.output(Motor2Step, GPIO.HIGH)
+            GPIO.output(Motor2Step, GPIO.HIGH)  # Step Motor2
             time.sleep(Speed / 2)
             GPIO.output(Motor2Step, GPIO.LOW)
             Step2Count += 1
 
-        time.sleep(Speed / 2)
+        time.sleep(Speed / 2)  # Delay between steps
+
 
 def StepMotor(StepPin, DirPin, Steps, Direction, SpeedDelay):
     # Control the stepper motor.
@@ -129,6 +135,7 @@ def StepMotor(StepPin, DirPin, Steps, Direction, SpeedDelay):
         time.sleep(SpeedDelay)
         GPIO.output(StepPin, GPIO.LOW)
         time.sleep(SpeedDelay)
+
 
 def CalibrateMotor(StepPin, DirPin, LimitSwitchPin):
     #Calibrate the motor by moving to the 0 position.
@@ -162,6 +169,7 @@ def MoveToPosition(StepPin, DirPin, TargetPosition, CurrentPosition):
     print(f"Position reached")
     return TargetPosition
 
+
 def SetServoAngle(Pwm, Angle):
     # Set the angle of a servo.
     DutyCycle = 2 + (Angle / 18)
@@ -171,6 +179,7 @@ def SetServoAngle(Pwm, Angle):
     GPIO.output(ServoPin1, False)
     Pwm.ChangeDutyCycle(0)
 
+
 try:
         # Waits for start button     
         WaitForStartButton()
@@ -179,6 +188,7 @@ try:
         CalibrateMotor(Motor2Step, Motor2Dir, LimitSwitchPin2)
         CalibrateMotor(Motor1Step, Motor1Dir, LimitSwitchPin1)
    
+        # Sets current position for X and Z axis to 0 after calibration
         CurrentPosition1 = 0
         CurrentPosition2 = 0
     
@@ -188,6 +198,8 @@ try:
             try:
                 XPosition = float(UserInput)
 
+
+                # Range where flipper 1 needs to pick up object
                 if XPosition < MinStPos:
                     Delay = CalculateDelay(ConveyorSpeed, FlipperDis)
                     print(f"Waiting for {Delay:.2f} seconds depending on the speed of the conveyor belt...")
@@ -197,7 +209,9 @@ try:
                     SetServoAngle(Pwm1, 170)
                     time.sleep(3.5)
                     SetServoAngle(Pwm1, 10)
+                
 
+                # Range where robot needs to pick up object
                 elif MinStPos <= XPosition <= MaxStPos:
                     # Calculate new x position based on last x position
                     NewXPos = XPosition - LastXPos
@@ -224,13 +238,13 @@ try:
                     elif MetalType == 'Steel':
                         XPosBin = int(SteelBinXPos)
                     
-                    #More options for different metals can be added above
+                    # More options for different metals can be added above
 
-                    #Move X-axis to correct bin
+                    # Move X-axis to correct bin
                     LastXPos = MoveToPosition(Motor1Step, Motor1Dir, XPosBin, XPosition)
                     
                   
-
+                # Range where flipper 2 needs to pick up object    
                 elif XPosition > MaxStPos:
                     Delay = CalculateDelay(ConveyorSpeed, FlipperDis)
                     print(f"Waiting for {Delay:.2f} seconds depending on the speed of the conveyor belt...")
@@ -247,8 +261,10 @@ try:
             except ValueError:
                 print("Enter a valid number.")
 
+
 except KeyboardInterrupt:
     print("\nProgram stopped.")
+
 
 finally:
     Pwm1.stop()
